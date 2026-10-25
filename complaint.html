@@ -1,0 +1,65 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Complaint · CivicConnect</title><link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"></head><body>
+<header class="nav" id="nav"></header><main><div id="flash"></div><div id="root" class="loading">Loading…</div></main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="js/app.js"></script><script>
+const pid = new URLSearchParams(location.search).get('id');
+let map = null;
+async function load(){
+ let d; try{ d = await api('/complaints/'+encodeURIComponent(pid)); }catch(e){ $('root').className=''; $('root').innerHTML=`<div class="card empty"><h2>${esc(e.message)}</h2><a class="btn" href="${HOME[ME.role]}">Back to dashboard</a></div>`; return }
+ const c=d.complaint, role=ME.role, staff=role!=='CITIZEN'; $('root').className='';
+ let ai='';
+ if(staff){ ai=`<div class="card"><h2>AI &amp; routing information</h2><dl class="kv"><dt>Citizen category</dt><dd>${esc(c.category)}</dd>
+  <dt>AI predicted</dt><dd>${c.ai_category?esc(c.ai_category)+' ('+Math.round(c.ai_confidence*100)+'% detection confidence)'+(c.ai_category!==c.category?' <span class="badge sv-high">Differs from citizen category – review</span>':''):'Not available'}<div class="small mut">${esc(c.ai_note||'')}</div></dd>
+  <dt>Service area</dt><dd>${esc(c.area||'Unmapped (outside configured sample areas) – admin review')}</dd>
+  <dt>Suggested dept.</dt><dd>${c.sugg_name?esc(c.sugg_name)+' ('+c.suggested_km+' km from office)':'None – choose manually'}</dd>
+  ${c.duplicate_of?`<dt>Possible duplicate</dt><dd><span class="badge sv-medium">Similar to <a href="complaint.html?id=${encodeURIComponent(c.duplicate_of)}">${esc(c.duplicate_of)}</a></span></dd>`:''}</dl></div>` }
+ let panel='';
+ if(role==='ADMIN'){
+  const locked=['Awaiting Verification','Resolved'].includes(c.status), sel=c.dept_id||c.suggested_dept_id;
+  const currentDept=d.departments.find(x=>x.id===sel) || d.departments.find(x=>x.id===c.suggested_dept_id);
+  const workTypes=[['ROAD','Road / PWD'],['SANITATION','Municipal / Sanitation'],['ELECTRICAL','Electrical'],['WATER','Water / Drainage'],['FIRE','Fire & Emergency'],['GENERAL','General Municipal']];
+  const selectedType=currentDept?.dtype || ({'Pothole':'ROAD','Damaged Road':'ROAD','Garbage Accumulation':'SANITATION','Broken Streetlight':'ELECTRICAL','Water Leakage':'WATER','Waterlogging':'WATER','Drainage Problem':'WATER','Electrical Problem':'ELECTRICAL','Fire-Related Issue':'FIRE'}[c.category] || 'GENERAL');
+  const selectedArea=currentDept?.area || c.area || 'Moinabad';
+  panel+=`<div class="card"><h2>Assign department</h2>${locked?'<p class="mut">Assignment is locked at this stage.</p>':`<form id="fAssign"><label for="workType">Work category</label><select id="workType">${workTypes.map(([v,t])=>`<option value="${v}" ${v===selectedType?'selected':''}>${t}</option>`).join('')}</select>
+   <label for="workArea">Service locality</label><select id="workArea"><option value="">Choose a locality</option>${CFG.localities.map(a=>`<option value="${esc(a)}" ${a===selectedArea?'selected':''}>${esc(a)}</option>`).join('')}</select>
+   <p class="small mut">Select the type of work and the locality separately. The complaint will be routed to the matching department for that area.</p>
+   <label>Admin remark</label><textarea id="remark" placeholder="Add assignment instructions (optional)"></textarea><p><button class="btn">${c.dept_id?'Reassign':'Confirm Assignment'}</button></p></form>`}</div>
+  <div class="card"><h2>Correct severity</h2><form id="fSev"><select id="sev">${CFG.severities.map(s=>`<option ${s===c.severity?'selected':''}>${s}</option>`).join('')}</select><label>Reason</label><input id="sevnote"><p><button class="btn sec">Update severity</button></p></form></div>`;
+  if(c.status==='Awaiting Verification') panel+=`<div class="card"><h2>Verify resolution</h2><p class="small mut">Compare the original image with the department's resolution image, then decide.</p><label>Note</label><input id="vnote"><p><button class="btn ok" id="vOk">Confirm Resolved</button> <button class="btn bad" id="vNo">Reject / Reopen</button></p></div>`;
+ }
+ if(role==='DEPARTMENT'){
+  panel+=`<div class="card"><h2>Update work status</h2>${d.options.length?`<form id="fDept"><label>New status</label><select id="newst">${d.options.map(o=>`<option>${esc(o)}</option>`).join('')}</select>
+  <label>Work remarks</label><textarea id="dremark" placeholder="What was done / what is planned?"></textarea>
+  <label>Resolution (after) image <span class="mut small">– required for Awaiting Verification</span></label><input type="file" id="rimg" accept=".jpg,.jpeg,.png,.webp,image/*"><p><button class="btn">Submit update</button></p></form>`:`<p class="mut">No further action is possible at this stage (${esc(c.status)}).</p>`}</div>`;
+ }
+ $('root').innerHTML=`<p class="small"><a href="${HOME[role]}">← Back to dashboard</a></p><h1>${esc(c.public_id)} &nbsp;${statusBadge(c.status)} ${sevBadge(c.severity)}</h1>
+ <div class="grid g2"><div>
+  <div class="card"><h2>Reported issue</h2><img class="fullimg" src="${esc(c.image)}" alt="Complaint image"><p><b>${esc(c.category)}</b></p><p>${esc(c.description||'No description provided.')}</p></div>
+  ${c.resolution_image?`<div class="card"><h2>Resolution evidence</h2><img class="fullimg" src="${esc(c.resolution_image)}" alt="Resolution image"><p class="small mut">Uploaded by department. Remarks: ${esc(c.dept_remark||'—')}</p></div>`:''}
+  <div class="card"><h2>Location</h2><div id="dmap"></div><p class="small">Lat ${c.lat.toFixed(6)}, Lon ${c.lon.toFixed(6)} · <a target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lon}">Open navigation</a></p></div>
+ </div><div>
+  <div class="card"><h2>Details</h2><dl class="kv"><dt>Submitted</dt><dd>${esc(c.created_at)}</dd><dt>Last updated</dt><dd>${esc(c.updated_at)}</dd>
+   ${staff?`<dt>Citizen</dt><dd>${esc(c.citizen_name)} (${esc(c.citizen_email)})</dd>`:''}
+   <dt>Severity</dt><dd>${sevBadge(c.severity)}<div class="small mut">${esc(c.severity_reason||'')}</div></dd>
+   <dt>Department</dt><dd>${esc(c.dept_name||'Not assigned yet')}</dd>${c.assigned_at?`<dt>Assigned at</dt><dd>${esc(c.assigned_at)}</dd>`:''}
+   <dt>Admin remark</dt><dd>${esc(c.admin_remark||'—')}</dd><dt>Dept. remark</dt><dd>${esc(c.dept_remark||'—')}</dd></dl></div>
+  ${ai}${panel}
+  <div class="card"><h2>Status history</h2><ul class="tl">${d.history.map(h=>`<li><b>${esc(h.status)}</b> <span class="small mut">· ${esc(h.created_at)} · ${esc(h.actor)}</span><div class="small">${esc(h.note)}</div></li>`).join('')}</ul></div>
+ </div></div>`;
+ if(map){map.remove()} map=L.map('dmap').setView([c.lat,c.lon],16);
+ L.tileLayer(LEAFLET_TILES,{maxZoom:19,attribution:LEAFLET_ATTR}).addTo(map); L.marker([c.lat,c.lon]).addTo(map).bindPopup(esc(c.public_id));
+ wire(c);
+}
+async function act(path, opts){ try{ const r=await api(path,opts); await load(); flash(r.message||'Done.','ok') }catch(e){ flash(e.message) } }
+function wire(c){
+ const base='/admin/complaints/'+encodeURIComponent(c.public_id);
+ if($('fAssign')) $('fAssign').onsubmit=e=>{e.preventDefault(); if(!$('workArea').value){flash('Please choose a service locality.');return;} if(confirm('Assign this complaint to the selected work category and locality?')) act(base+'/assign',{method:'POST',body:{dtype:$('workType').value,area:$('workArea').value,remark:$('remark').value}})};
+ if($('fSev')) $('fSev').onsubmit=e=>{e.preventDefault(); act(base+'/severity',{method:'POST',body:{severity:$('sev').value,note:$('sevnote').value}})};
+ if($('vOk')) $('vOk').onclick=()=>act(base+'/verify',{method:'POST',body:{action:'resolve',note:$('vnote').value}});
+ if($('vNo')) $('vNo').onclick=()=>act(base+'/verify',{method:'POST',body:{action:'reopen',note:$('vnote').value}});
+ if($('fDept')) $('fDept').onsubmit=e=>{e.preventDefault(); const fd=new FormData(); fd.append('status',$('newst').value); fd.append('remark',$('dremark').value);
+  if($('rimg').files[0]) fd.append('resolution_image',$('rimg').files[0]); act('/dept/complaints/'+encodeURIComponent(c.public_id)+'/update',{method:'POST',form:fd})};
+}
+(async()=>{ if(!(await boot('CITIZEN,ADMIN,DEPARTMENT'))) return; await load(); const m=sessionStorage.getItem('flashOk'); if(m){sessionStorage.removeItem('flashOk'); flash(m,'ok')} })();
+</script></body></html>

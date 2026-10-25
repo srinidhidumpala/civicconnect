@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin Registration · CivicConnect</title><link rel="stylesheet" href="css/style.css"></head>
+<body class="auth-page"><header class="nav" id="nav"></header>
+<main class="auth-layout"><section class="auth-story">
+<div class="eyebrow">CIVICCONNECT · GOVERNANCE PORTAL</div><h1>Build trust.<br><span>Improve your city.</span></h1>
+<p>Create an administrator account to coordinate civic complaints, prioritize urgent issues, and help communities get faster resolutions.</p>
+<div class="story-points"><div><b>01</b><span>Review and route civic issues</span></div><div><b>02</b><span>Coordinate verified departments</span></div><div><b>03</b><span>Track progress transparently</span></div></div>
+<div class="city-art" aria-hidden="true"><div class="orb orb-one"></div><div class="orb orb-two"></div><div class="building b-one"></div><div class="building b-two"></div><div class="building b-three"></div><div class="city-road"></div><div class="pin">✓</div></div>
+</section><section class="auth-panel"><div id="flash"></div><div class="auth-card"><div class="auth-icon">✦</div><div class="eyebrow">ADMINISTRATOR</div><h2>Create admin account</h2><p class="mut">Enter your details to create an account. You can sign in as soon as registration is complete.</p>
+<form id="f"><label for="name">Full name</label><input id="name" autocomplete="name" placeholder="e.g. Priya Sharma" required>
+<label for="email">Official email</label><input type="email" id="email" autocomplete="email" placeholder="you@organization.gov" required>
+<label for="pw">Password <span class="hint">(10+ characters, letters and numbers)</span></label><div class="password-wrap"><input type="password" id="pw" autocomplete="new-password" required><button type="button" class="show-password" data-target="pw" aria-label="Show password">Show</button></div>
+<label for="pw2">Confirm password</label><div class="password-wrap"><input type="password" id="pw2" autocomplete="new-password" required><button type="button" class="show-password" data-target="pw2" aria-label="Show confirm password">Show</button></div>
+<button class="btn auth-submit" id="b" type="submit">Create admin account <span>→</span></button></form>
+<div class="auth-foot">Already registered? <a href="admin-login.html">Admin sign in</a></div>
+<div class="secure-note"><span>✓</span><div><b>Account security</b><small>Use a strong password and keep your sign-in details private.</small></div></div>
+</div></section></main><script src="js/app.js"></script><script>
+(async()=>{if(!(await boot(null)))return;if(ME)return location.href=HOME[ME.role];
+authForm({form:'f',button:'b',path:'/admin/register',busy:'Creating account…', redirect:()=> 'admin-login.html?registered=1',
+collect:()=>({name:$('name').value.trim(),email:$('email').value.trim(),password:$('pw').value,confirm:$('pw2').value}),
+validate:d=>[...checkIdentity(d.name,d.email),...checkPassword(d.password,d.confirm,true)],
+success:d=>d.message||'Admin account created. You can now sign in.'});})();
+document.querySelectorAll('.show-password').forEach(b=>b.addEventListener('click',()=>{const x=$(b.dataset.target);x.type=x.type==='password'?'text':'password';b.textContent=x.type==='password'?'Show':'Hide';}));
+</script></body></html>

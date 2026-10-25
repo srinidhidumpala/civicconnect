@@ -1,0 +1,86 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Report Issue · CivicConnect</title><link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"></head><body>
+<header class="nav" id="nav"></header><main><div id="flash"></div><h1>Report a Civic Issue</h1>
+<form id="cform" class="grid g2">
+<div class="card"><label>Category *</label><select id="category" required></select>
+<label>Photo of the issue * <span class="mut small">(JPG/PNG/WEBP, max 5 MB)</span></label>
+<input type="file" id="image" accept=".jpg,.jpeg,.png,.webp,image/*" required><img id="preview" class="preview" alt="Preview">
+<label>Description (optional)</label><textarea id="description" placeholder="e.g. Large pothole near the main road; vehicles struggle to pass."></textarea></div>
+<div class="card"><h2>Issue location *</h2><label for="locality">Locality / area *</label><select id="locality" required><option value="">Choose locality in Hyderabad / Rangareddy</option></select><p class="small mut">Choose the locality first, then use GPS or place the marker on the map.</p><button type="button" class="btn sec sm" id="gps">📍 Use My Current Location</button>
+<p class="small mut" id="gpsmsg">Click the map or drag the marker to the exact spot of the problem. Your device GPS may differ from where the problem is.</p>
+<div id="map"></div><p><b>Latitude:</b> <span id="latv">—</span> &nbsp; <b>Longitude:</b> <span id="lonv">—</span></p></div>
+<div style="grid-column:1/-1"><button class="btn" id="submit">Submit Complaint</button> <a class="btn sec" href="citizen.html">Cancel</a></div></form></main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="js/app.js"></script><script>
+(async()=>{
+if(!(await boot('CITIZEN'))) return;
+$('category').innerHTML='<option value="">Select category…</option>'+CFG.categories.map(c=>`<option>${esc(c)}</option>`).join('');
+$('locality').innerHTML='<option value="">Choose locality in Hyderabad / Rangareddy</option>'+CFG.localities.map(a=>`<option>${esc(a)}</option>`).join('');
+const key = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())+Math.random()).replace(/-/g,'');  // idempotency key: prevents double submission
+let lat=null, lon=null, marker=null;
+const map=L.map('map').setView([17.385,78.4867],11);
+L.tileLayer(LEAFLET_TILES,{maxZoom:19,attribution:LEAFLET_ATTR}).addTo(map);
+function upd(la,lo){lat=la;lon=lo;$('latv').textContent=la.toFixed(6);$('lonv').textContent=lo.toFixed(6)}
+function setPoint(la,lo,z){ if(!marker){marker=L.marker([la,lo],{draggable:true}).addTo(map);marker.on('dragend',()=>{userPicked=true;const p=marker.getLatLng();upd(p.lat,p.lng)})} else marker.setLatLng([la,lo]); upd(la,lo); if(z)map.setView([la,lo],z) }
+let userPicked = false;   // true once the citizen clicks the map or drags the marker themselves
+map.on('click', e => { userPicked = true; setPoint(e.latlng.lat, e.latlng.lng); });
+// ===GPS-START===
+let locating = false;
+const BTN_TEXT = '📍 Use My Current Location';
+function gpsMsg(text, kind) {                       // kind: 'err' | 'ok' | undefined (neutral)
+  const m = $('gpsmsg'); m.textContent = text;
+  m.style.color = kind === 'err' ? '#b91c1c' : kind === 'ok' ? '#15803d' : '';
+}
+function showGeoError(err) {
+  const manual = ' You can still click on the map (or drag the marker) to choose the location manually.';
+  if (err.code === 1) gpsMsg('Location permission denied. To allow it in Chrome: click the icon at the left of the address bar → Site settings → Location → Allow, then press "Use My Current Location".' + manual, 'err');
+  else if (err.code === 2) gpsMsg('Your location is currently unavailable. Check that location services / GPS / Wi-Fi are turned on for this device.' + manual, 'err');
+  else if (err.code === 3) gpsMsg('Getting your location timed out.' + manual + ' You can also press "Use My Current Location" to try again.', 'err');
+  else gpsMsg('Could not get your location.' + manual, 'err');
+}
+function locate(auto) {                              // auto=true: called on page open / permission change
+  if (!('geolocation' in navigator)) { gpsMsg('Geolocation is not supported by this browser. Please click the map to choose the location manually.', 'err'); return; }
+  if (window.isSecureContext === false) { gpsMsg('Browsers only allow location access on HTTPS or http://localhost (you are on ' + location.origin + '). Open the site at http://localhost:5000 or choose the location on the map.', 'err'); return; }
+  if (locating) return;
+  locating = true; $('gps').disabled = true; $('gps').textContent = '⏳ Getting location…';
+  gpsMsg('Getting your current location… if your browser asks, please click "Allow".');
+  const done = () => { locating = false; $('gps').disabled = false; $('gps').textContent = BTN_TEXT; };
+  const ok = p => {
+    done();
+    if (auto && userPicked) { gpsMsg('Your device location was found, but you already chose a point on the map, so it was not moved. Press "Use My Current Location" to use your device location instead.', 'ok'); return; }
+    setPoint(p.coords.latitude, p.coords.longitude, 17);   // moves marker + centres map + updates #latv/#lonv + lat/lon used on submit
+    gpsMsg('Location detected (accuracy ≈ ' + Math.round(p.coords.accuracy) + ' m). Drag the marker to the exact problem spot if needed.', 'ok');
+  };
+  navigator.geolocation.getCurrentPosition(ok, err => {
+    if (err.code === 2 || err.code === 3) {          // unavailable/timeout with high accuracy -> one retry with low accuracy
+      gpsMsg('Still looking for your location (trying a faster, less precise method)…');
+      navigator.geolocation.getCurrentPosition(ok, e2 => { done(); showGeoError(e2); }, {enableHighAccuracy: false, timeout: 15000, maximumAge: 60000});
+    } else { done(); showGeoError(err); }
+  }, {enableHighAccuracy: true, timeout: 10000, maximumAge: 0});
+}
+$('gps').onclick = () => locate(false);
+async function initGeo() {                           // runs when the complaint form opens
+  if (navigator.permissions && navigator.permissions.query) {
+    try {
+      const st = await navigator.permissions.query({name: 'geolocation'});
+      st.onchange = () => { if (st.state === 'granted') locate(true); };   // user changed it in Chrome's site settings
+      if (st.state === 'denied') { showGeoError({code: 1}); return; }      // respect the block: do not nag
+    } catch (e) { /* Permissions API not available for geolocation: fall through and just ask */ }
+  }
+  locate(true);   // 'granted' -> silent; 'prompt' -> browser shows its Allow/Block popup
+}
+// ===GPS-END===
+initGeo();
+$('image').onchange=e=>{const f=e.target.files[0],pv=$('preview'); if(!f){pv.style.display='none';return}
+ if(!/\.(jpe?g|png|webp)$/i.test(f.name)){alert('Unsupported file type. Use JPG, PNG or WEBP.');e.target.value='';pv.style.display='none';return}
+ if(f.size>5*1024*1024){alert('Image is larger than 5 MB.');e.target.value='';pv.style.display='none';return}
+ pv.src=URL.createObjectURL(f);pv.style.display='block'};
+$('cform').onsubmit=async e=>{e.preventDefault();
+ if(!$('locality').value){return flash('Please choose the locality / area first.')} if(lat===null){return flash('Please select the issue location on the map first.')}
+ const fd=new FormData(); fd.append('category',$('category').value); fd.append('description',$('description').value);
+ fd.append('lat',lat); fd.append('lon',lon); fd.append('area',$('locality').value); fd.append('submit_key',key); fd.append('image',$('image').files[0]);
+ $('submit').disabled=true; $('submit').textContent='Submitting…';
+ try{ const d=await api('/complaints',{method:'POST',form:fd}); sessionStorage.setItem('flashOk','Complaint submitted successfully. Your complaint ID is '+d.public_id+'.'); location.href='complaint.html?id='+encodeURIComponent(d.public_id) }
+ catch(err){ flash(err.message); $('submit').disabled=false; $('submit').textContent='Submit Complaint' } };
+})();
+</script></body></html>

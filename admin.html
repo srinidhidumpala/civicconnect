@@ -1,0 +1,76 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin · CivicConnect</title><link rel="stylesheet" href="css/style.css"></head><body>
+<header class="nav" id="nav"></header><main><div id="flash"></div><h1>Admin Dashboard</h1>
+<section class="card user-directory-card" style="margin:18px 0">
+  <div class="directory-head"><div><h2 style="margin:0">User Profiles</h2><p class="small mut">View all registered accounts, grouped separately by role.</p></div><button type="button" class="btn" id="toggleUsers" aria-expanded="false">View All User Profiles</button></div>
+  <div id="userDirectory" hidden></div>
+</section>
+<div id="stats" class="grid stats"></div>
+<div class="card" style="margin-top:18px"><form class="filters" id="ff"></form></div>
+<div class="card"><h2 id="ttl">Complaints</h2><div id="list" class="loading">Loading…</div></div><div class="card"><h2>Account registration requests</h2><p class="small mut">Review administrator and department access requests before granting dashboard access.</p><div id="registrationRequests" class="loading">Loading requests…</div></div>
+</main>
+<script src="js/app.js"></script><script>
+const opts=(arr,sel,label)=>`<option value="">${label}</option>`+arr.map(x=>{const v=typeof x==='object'?x.id:x,t=typeof x==='object'?x.name:x;return `<option value="${esc(v)}" ${String(sel)===String(v)?'selected':''}>${esc(t)}</option>`}).join('');
+let FILTERS={};
+async function load(){
+ const qs=new URLSearchParams(Object.entries(FILTERS).filter(([k,v])=>v)).toString();
+ try{ const d=await api('/admin/dashboard'+(qs?'?'+qs:'')), s=d.stats, f=FILTERS;
+  $('stats').innerHTML=[['total','Total complaints'],['new','Awaiting assignment'],['assigned','Assigned / pending work'],['progress','In progress'],['verify','Awaiting verification'],['resolved','Resolved'],['high','High / Critical open']].map(([k,l])=>`<div class="stat"><b>${s[k]}</b><span>${l}</span></div>`).join('');
+  if(!$('ff').dataset.built){ $('ff').dataset.built=1;
+   $('ff').innerHTML=`<input id="q" placeholder="Complaint ID"><select id="category">${opts(CFG.categories,'','All categories')}</select><select id="severity">${opts(CFG.severities,'','All severities')}</select>
+   <select id="status">${opts(d.statuses,'','All statuses')}</select><select id="dept">${opts(d.departments,'','All departments')}</select><select id="area">${opts(d.areas,'','All areas')}</select>
+   <select id="sort"><option value="">Newest first</option><option value="severity">Severity first</option></select><button class="btn">Filter</button><button type="button" class="btn sec" id="reset">Reset</button>`;
+   $('ff').onsubmit=e=>{e.preventDefault();FILTERS={};['q','category','severity','status','dept','area','sort'].forEach(k=>FILTERS[k]=$(k).value);load()};
+   $('reset').onclick=()=>{$('ff').reset();FILTERS={};load()}; }
+  $('ttl').textContent=`Complaints (${d.items.length})`;
+  $('list').className=''; $('list').innerHTML=d.items.length?`<div class="tw"><table><tr><th>ID</th><th>Image</th><th>Citizen</th><th>Category</th><th>Description</th><th>Lat, Lon</th><th>Area</th><th>Date</th><th>Severity</th><th>Department</th><th>Status</th><th></th></tr>`+
+  d.items.map(c=>`<tr><td><b>${esc(c.public_id)}</b>${c.duplicate_of?'<div><span class="badge sv-medium">Possible duplicate</span></div>':''}</td><td><img class="thumb" src="${esc(c.image)}" alt=""></td><td>${esc(c.citizen_name)}</td><td>${esc(c.category)}</td>
+  <td class="small">${esc((c.description||'—').slice(0,60))}</td><td class="small">${c.lat.toFixed(4)}, ${c.lon.toFixed(4)}</td><td>${esc(c.area||'Unmapped')}</td><td class="small">${esc(c.created_at)}</td><td>${sevBadge(c.severity)}</td>
+  <td class="small">${esc(c.dept_name||'—')}</td><td>${statusBadge(c.status)}</td><td><a class="btn sm" href="complaint.html?id=${encodeURIComponent(c.public_id)}">Open</a></td></tr>`).join('')+`</table></div>`:'<div class="empty">No complaints match.</div>';
+ }catch(e){flash(e.message)}
+}
+
+let userDirectoryLoaded = false;
+async function loadUserDirectory(){
+ const box = $('userDirectory');
+ box.hidden = false;
+ box.innerHTML = '<div class="loading">Loading user profiles…</div>';
+ try {
+  const d = await api('/admin/users');
+  const groups = [
+   {role:'CITIZEN',title:'Citizen Profiles',description:'People who registered to report and track civic complaints.'},
+   {role:'ADMIN',title:'Admin Profiles',description:'Administrator accounts.'}
+  ];
+  box.innerHTML = `<div class="directory-summary"><span><b>${d.counts.CITIZEN || 0}</b> Citizens</span><span><b>${d.counts.ADMIN || 0}</b> Admins</span></div>` + groups.map(g=>{
+   const items=d.items.filter(u=>u.role===g.role);
+   return `<section class="directory-group"><div class="directory-group-title"><div><h3>${g.title}</h3><p class="small mut">${g.description}</p></div><span class="badge">${items.length}</span></div>`+
+    (items.length ? `<div class="tw"><table><thead><tr><th>Account ID</th><th>Name</th><th>Email / Login ID</th><th>Department</th><th>Area / Jurisdiction</th><th>Registered</th></tr></thead><tbody>`+
+      items.map(u=>`<tr><td>#${esc(u.id)}</td><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${esc(u.department_name || '—')}</td><td>${esc(u.department_area || '—')}</td><td>${esc(u.created_at || '—')}</td></tr>`).join('')+
+      `</tbody></table></div>` : '<div class="empty">No accounts in this group yet.</div>')+'</section>';
+  }).join('');
+  userDirectoryLoaded = true;
+ } catch(e) {
+  box.innerHTML = `<div class="flash error">${esc(e.message)}</div>`;
+ }
+}
+
+$('toggleUsers').onclick = async () => {
+ const box=$('userDirectory'), button=$('toggleUsers');
+ if (!box.hidden) { box.hidden=true; button.textContent='View All User Profiles'; button.setAttribute('aria-expanded','false'); return; }
+ button.textContent='Hide User Profiles'; button.setAttribute('aria-expanded','true');
+ await loadUserDirectory();
+};
+
+async function loadRegistrationRequests(){
+ const box=$('registrationRequests'); if(!box)return;
+ try{
+  const d=await api('/admin/registration-requests');
+  if(!d.items.length){box.className='empty';box.textContent='No pending registration requests.';return;}
+  box.className='tw';box.innerHTML='<table><thead><tr><th>Role</th><th>Name</th><th>Email</th><th>Department / area</th><th>Requested</th><th>Actions</th></tr></thead><tbody>'+
+   d.items.map(r=>`<tr><td>${esc(r.role)}</td><td>${esc(r.name)}</td><td>${esc(r.email)}</td><td>${esc(r.department_name||'—')}<br><span class="small mut">${esc(r.area||'')}</span></td><td>${esc(r.created_at)}</td><td><button class="btn sm" data-approve="${r.id}">Approve</button> <button class="btn sec sm" data-reject="${r.id}">Reject</button></td></tr>`).join('')+'</tbody></table>';
+  box.querySelectorAll('[data-approve]').forEach(b=>b.onclick=async()=>{if(!confirm('Approve this account request?'))return;b.disabled=true;try{await api('/admin/registration-requests/'+b.dataset.approve+'/approve',{method:'POST',body:{}});flash('Account request approved.','ok');await loadRegistrationRequests()}catch(e){showErrors([e.message]);b.disabled=false}});
+  box.querySelectorAll('[data-reject]').forEach(b=>b.onclick=async()=>{if(!confirm('Reject this account request?'))return;b.disabled=true;try{await api('/admin/registration-requests/'+b.dataset.reject+'/reject',{method:'POST',body:{}});flash('Account request rejected.','ok');await loadRegistrationRequests()}catch(e){showErrors([e.message]);b.disabled=false}});
+ }catch(e){box.className='empty';box.textContent=e.message}
+}
+(async()=>{ if(await boot('ADMIN')){ await load(); await loadRegistrationRequests();  } })();
+</script></body></html>

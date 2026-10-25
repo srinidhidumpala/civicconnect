@@ -1,0 +1,18 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My Complaints · CivicConnect</title><link rel="stylesheet" href="css/style.css">
+
+</head><body><header class="nav" id="nav"></header><main><div id="flash"></div>
+<div id="root" class="loading">Loading…</div>
+</main>
+<script src="js/app.js"></script><script>
+
+(async()=>{ if(!(await boot("CITIZEN"))) return; 
+ try{ const d=await api("/citizen/dashboard"), s=d.stats;
+ $("root").className="";
+ $("root").innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h1>Welcome, ${esc(ME.name)}</h1><a class="btn" href="new-complaint.html">+ Submit New Complaint</a></div>
+ <div class="grid stats"><div class="stat"><b>${s.total}</b><span>Total submitted</span></div><div class="stat"><b>${s.pending}</b><span>Pending</span></div><div class="stat"><b>${s.progress}</b><span>In progress</span></div><div class="stat"><b>${s.resolved}</b><span>Resolved</span></div></div>
+ <div class="card" style="margin-top:18px"><h2>My Complaints</h2>${d.items.length?`<div class="tw"><table><tr><th>ID</th><th>Category</th><th>Submitted</th><th>Severity</th><th>Status</th><th>Department</th><th></th></tr>`+
+ d.items.map(c=>`<tr><td><b>${esc(c.public_id)}</b></td><td>${esc(c.category)}</td><td>${esc(c.created_at)}</td><td>${sevBadge(c.severity)}</td><td>${statusBadge(c.status)}</td><td>${esc(c.dept_name||"—")}</td><td><a class="btn sm sec" href="complaint.html?id=${encodeURIComponent(c.public_id)}">View Details</a></td></tr>`).join("")+`</table></div>`
+ :`<div class="empty">You haven't reported any issue yet.<br><br><a class="btn" href="new-complaint.html">Report your first issue</a></div>`}</div>`;
+ }catch(e){flash(e.message)}})();
+</script></body></html>

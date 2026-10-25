@@ -1,0 +1,16 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Citizen Registration · CivicConnect</title><link rel="stylesheet" href="css/style.css">
+</head><body><header class="nav" id="nav"></header><main><div id="flash"></div>
+<div class="card center"><h1>Citizen Registration</h1><form id="f">
+<label for="name">Full name</label><input id="name" autocomplete="name"><label for="email">Email</label><input type="email" id="email" autocomplete="email">
+<label for="pw">Password (min 8 characters)</label><input type="password" id="pw" autocomplete="new-password">
+<label for="pw2">Confirm password</label><input type="password" id="pw2" autocomplete="new-password"><p><button class="btn" id="b">Register</button></p></form>
+<p class="small">Already registered? <a href="login.html">Login</a></p></div></main>
+<script src="js/app.js"></script><script>
+(async()=>{ if(!(await boot(null))) return; if(ME) return location.href=HOME[ME.role];
+authForm({form:'f',button:'b',path:'/register',busy:'Creating your account…',
+ collect:()=>({name:$('name').value.trim(),email:$('email').value.trim(),password:$('pw').value,confirm:$('pw2').value}),
+ validate:d=>[...checkIdentity(d.name,d.email),...checkPassword(d.password,d.confirm)],
+ success:()=>'Account created. Redirecting to login…', redirect:()=>'login.html?registered=1'});
+})();
+</script></body></html>

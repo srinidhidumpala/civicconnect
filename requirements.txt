@@ -1,0 +1,4 @@
+Flask>=3.0
+Pillow>=10.0
+# Optional (only if you have YOLOv8 weights at model/best.pt):
+# ultralytics

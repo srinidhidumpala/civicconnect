@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Department Registration · CivicConnect</title><link rel="stylesheet" href="css/style.css"></head>
+<body class="auth-page"><header class="nav" id="nav"></header>
+<main class="auth-layout"><section class="auth-story">
+<div class="eyebrow">CIVICCONNECT · SERVICE NETWORK</div><h1>Local action.<br><span>Visible impact.</span></h1>
+<p>Register your civic team to receive assigned complaints, share progress updates, and document completed work in your service area.</p>
+<div class="story-points"><div><b>01</b><span>Receive relevant local issues</span></div><div><b>02</b><span>Keep residents informed</span></div><div><b>03</b><span>Verify work with resolution proof</span></div></div>
+<div class="city-art" aria-hidden="true"><div class="orb orb-one"></div><div class="orb orb-two"></div><div class="building b-one"></div><div class="building b-two"></div><div class="building b-three"></div><div class="city-road"></div><div class="pin">⌖</div></div>
+</section><section class="auth-panel"><div id="flash"></div><div class="auth-card"><div class="auth-icon teal">⌂</div><div class="eyebrow">DEPARTMENT PARTNER</div><h2>Register your department</h2><p class="mut">Enter your department and staff details to create an account. You can sign in as soon as registration is complete.</p>
+<form id="f"><label for="dtype">Department category</label><select id="dtype" required><option value="">Choose a category</option><option value="ROAD">Roads &amp; Public Works</option><option value="SANITATION">Sanitation &amp; Waste</option><option value="ELECTRICAL">Electrical &amp; Streetlights</option><option value="WATER">Water &amp; Drainage</option><option value="FIRE">Fire &amp; Emergency</option><option value="GENERAL">General Municipal Services</option></select>
+<label for="name">Authorized staff name</label><input id="name" autocomplete="name" placeholder="Full name" required>
+<label for="email">Official email</label><input type="email" id="email" autocomplete="email" placeholder="name@department.gov" required>
+<label for="area">Area / jurisdiction</label><select id="area" required><option value="">Choose a locality</option></select>
+<label for="pw">Password <span class="hint">(10+ characters, letters and numbers)</span></label><div class="password-wrap"><input type="password" id="pw" autocomplete="new-password" required><button type="button" class="show-password" data-target="pw">Show</button></div>
+<label for="pw2">Confirm password</label><div class="password-wrap"><input type="password" id="pw2" autocomplete="new-password" required><button type="button" class="show-password" data-target="pw2">Show</button></div>
+<button class="btn auth-submit teal-btn" id="b" type="submit">Register department <span>→</span></button></form>
+<div class="auth-foot">Already registered? <a href="dept-login.html">Department sign in</a></div>
+<div class="secure-note"><span>✓</span><div><b>Account security</b><small>Use an official email and keep your password secure.</small></div></div>
+</div></section></main><script src="js/app.js"></script><script>
+(async()=>{if(!(await boot(null)))return;if(ME)return location.href=HOME[ME.role];
+$('area').innerHTML='<option value="">Choose a locality</option>'+CFG.localities.map(a=>`<option>${esc(a)}</option>`).join('');
+authForm({form:'f',button:'b',path:'/dept/register',busy:'Creating department account…', redirect:()=> 'dept-login.html?registered=1',
+collect:()=>({department_name:'',dtype:$('dtype').value,name:$('name').value.trim(),email:$('email').value.trim(),area:$('area').value,password:$('pw').value,confirm:$('pw2').value}),
+validate:d=>{const e=[...checkIdentity(d.name,d.email,'Authorized staff name'),...checkPassword(d.password,d.confirm,true)];if(!d.dtype)e.push('Choose a department category.');if(!d.area)e.push('Area or jurisdiction is required.');return e;},
+success:d=>d.message||'Department account created. You can now sign in.'});})();
+document.querySelectorAll('.show-password').forEach(b=>b.addEventListener('click',()=>{const x=$(b.dataset.target);x.type=x.type==='password'?'text':'password';b.textContent=x.type==='password'?'Show':'Hide';}));
+</script></body></html>

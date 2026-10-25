@@ -1,0 +1,25 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Department · CivicConnect</title><link rel="stylesheet" href="css/style.css"></head><body>
+<header class="nav" id="nav"></header><main><div id="flash"></div><h1 id="dname">Department</h1><p class="mut" id="darea"></p>
+<div id="stats" class="grid stats"></div>
+<div class="card" style="margin-top:18px"><form class="filters" id="ff"></form></div>
+<div class="card"><h2>Assigned complaints</h2><div id="list" class="loading">Loading…</div></div></main>
+<script src="js/app.js"></script><script>
+const opts=(arr,label)=>`<option value="">${label}</option>`+arr.map(x=>`<option>${esc(x)}</option>`).join('');
+let F={};
+async function load(){
+ const qs=new URLSearchParams(Object.entries(F).filter(([k,v])=>v)).toString();
+ try{ const d=await api('/dept/dashboard'+(qs?'?'+qs:'')), s=d.stats;
+  $('dname').textContent=d.dept.name; $('darea').textContent='Authorized area / jurisdiction: '+d.dept.area+' — you only see complaints assigned to this department.';
+  $('stats').innerHTML=[['total','Total assigned'],['pending','Pending'],['progress','In progress'],['resolved','Resolved'],['high','High / Critical open']].map(([k,l])=>`<div class="stat"><b>${s[k]}</b><span>${l}</span></div>`).join('');
+  if(!$('ff').dataset.built){ $('ff').dataset.built=1;
+   $('ff').innerHTML=`<select id="status">${opts(d.statuses,'All statuses')}</select><select id="severity">${opts(CFG.severities,'All severities')}</select><button class="btn">Filter</button><button type="button" class="btn sec" id="reset">Reset</button>`;
+   $('ff').onsubmit=e=>{e.preventDefault();F={status:$('status').value,severity:$('severity').value};load()}; $('reset').onclick=()=>{$('ff').reset();F={};load()}; }
+  $('list').className=''; $('list').innerHTML=d.items.length?`<div class="tw"><table><tr><th>ID</th><th>Image</th><th>Category</th><th>Description</th><th>Location</th><th>Locality</th><th>Severity</th><th>Assigned</th><th>Status</th><th></th></tr>`+
+  d.items.map(c=>`<tr><td><b>${esc(c.public_id)}</b></td><td><img class="thumb" src="${esc(c.image)}" alt=""></td><td>${esc(c.category)}</td><td class="small">${esc((c.description||'—').slice(0,60))}</td>
+  <td class="small">${c.lat.toFixed(4)}, ${c.lon.toFixed(4)}</td><td>${esc(c.area||d.dept.area||"—")}</td><td>${sevBadge(c.severity)}</td><td class="small">${esc(c.assigned_at||'')}</td><td>${statusBadge(c.status)}</td>
+  <td><a class="btn sm" href="complaint.html?id=${encodeURIComponent(c.public_id)}">Open</a></td></tr>`).join('')+`</table></div>`:'<div class="empty">No complaints assigned to your department yet.</div>';
+ }catch(e){flash(e.message)}
+}
+(async()=>{ if(await boot('DEPARTMENT')) { load(); } })();
+</script></body></html>
