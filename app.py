@@ -1,4 +1,11 @@
-                   departments=[dict(d) for d in q("SELECT id,name,dtype,area FROM departments ORDER BY dtype,area")], areas=SERVICE_LOCALITIES,
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT / "backend"))
+
+from backend.app import app                  
+departments=[dict(d) for d in q("SELECT id,name,dtype,area FROM departments ORDER BY dtype,area")], areas=SERVICE_LOCALITIES,
                    statuses=["Pending Assignment", "Assigned", "In Progress", "Awaiting Verification", "Resolved", "Reopened"])
 
 @app.route("/api/admin/complaints/<pid>/assign", methods=["POST"])
